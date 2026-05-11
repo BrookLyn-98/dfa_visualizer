@@ -768,12 +768,10 @@ function drawLabelBg(text, x, y) {
 } // <-- This bracket was missing before, which swallowed the drag logic!
 
 // --- BULLETPROOF DRAG AND DROP LOGIC ---
-let isDragging = false;
+// --- DIFFERENT LOGIC: POINTER EVENTS & CAPTURE ---
 let draggedNode = null;
-let drawPending = false;
-let currentCursor = 'default';
 
-function getMousePos(canvas, evt) {
+function getPointerPos(canvas, evt) {
     const rect = canvas.getBoundingClientRect();
     return {
         x: evt.clientX - rect.left,
@@ -781,8 +779,9 @@ function getMousePos(canvas, evt) {
     };
 }
 
-canvas.addEventListener('mousedown', (evt) => {
-    const pos = getMousePos(canvas, evt);
+// 1. Use 'pointerdown' instead of 'mousedown'
+canvas.addEventListener('pointerdown', (evt) => {
+    const pos = getPointerPos(canvas, evt);
     
     for (let id of (machine.states || [])) {
         const layout = machine.layout[id];
@@ -792,42 +791,36 @@ canvas.addEventListener('mousedown', (evt) => {
         const nodeY = layout.y * canvas.height;
         
         if (Math.hypot(pos.x - nodeX, pos.y - nodeY) <= 28) {
-            isDragging = true;
             draggedNode = id;
-            evt.preventDefault(); 
             
-            if (currentCursor !== 'grabbing') {
-                canvas.style.cursor = 'grabbing';
-                currentCursor = 'grabbing';
-            }
+            // THE MAGIC BULLET: Lock the mouse to the canvas!
+            // It will not drop the node even if you drag outside the browser window.
+            canvas.setPointerCapture(evt.pointerId);
+            
+            canvas.style.cursor = 'grabbing';
+            evt.preventDefault();
             return;
         }
     }
 });
 
-window.addEventListener('mousemove', (evt) => {
-    if (isDragging && draggedNode) {
-        evt.preventDefault();
-        
-        const pos = getMousePos(canvas, evt);
+// 2. Use 'pointermove'
+canvas.addEventListener('pointermove', (evt) => {
+    if (draggedNode) {
+        const pos = getPointerPos(canvas, evt);
         
         machine.layout[draggedNode].x = Math.max(0.05, Math.min(0.95, pos.x / canvas.width));
         machine.layout[draggedNode].y = Math.max(0.05, Math.min(0.95, pos.y / canvas.height));
         
-        if (!drawPending) {
-            drawPending = true;
-            requestAnimationFrame(() => {
-                draw();
-                drawPending = false;
-            });
-        }
-    } else if (evt.target === canvas) {
+        // Pointer events are naturally hardware-synced, so we can just draw directly
+        draw(); 
+    } else {
+        // Hover logic
         let hovering = false;
-        const pos = getMousePos(canvas, evt);
+        const pos = getPointerPos(canvas, evt);
         for (let id of (machine.states || [])) {
             const layout = machine.layout[id];
             if (!layout) continue;
-            
             const nodeX = layout.x * canvas.width;
             const nodeY = layout.y * canvas.height;
             if (Math.hypot(pos.x - nodeX, pos.y - nodeY) <= 28) {
@@ -835,28 +828,26 @@ window.addEventListener('mousemove', (evt) => {
                 break;
             }
         }
-        
-        const newCursor = hovering ? 'grab' : 'default';
-        if (currentCursor !== newCursor) {
-            canvas.style.cursor = newCursor;
-            currentCursor = newCursor;
-        }
+        canvas.style.cursor = hovering ? 'grab' : 'default';
     }
 });
 
-function stopDragging() {
-    if (isDragging) {
-        isDragging = false;
+// 3. Clean up when the pointer is released or interrupted
+function stopPointer(evt) {
+    if (draggedNode) {
+        // Release the lock
+        canvas.releasePointerCapture(evt.pointerId);
         draggedNode = null;
-        if (currentCursor !== 'default') {
-            canvas.style.cursor = 'default';
-            currentCursor = 'default';
-        }
+        canvas.style.cursor = 'default';
+        
         document.getElementById('configInput').value = JSON.stringify(machine, null, 4);
     }
 }
 
-window.addEventListener('mouseup', stopDragging);
+// 4. Handle both 'up' and 'cancel' (like alt-tabbing while dragging)
+canvas.addEventListener('pointerup', stopPointer);
+canvas.addEventListener('pointercancel', stopPointer);
+// -------------------------------------------------
 // ---------------------------
 
 window.onresize = draw;
