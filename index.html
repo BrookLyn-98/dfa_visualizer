@@ -774,10 +774,10 @@ function drawLabelBg(text, x, y) {
     ctx.restore();
 
     // --- DRAG AND DROP LOGIC ---
-// --- DRAG AND DROP LOGIC ---
     let isDragging = false;
     let draggedNode = null;
-    let drawPending = false; // NEW: Tracks if a frame is waiting to be drawn
+    let drawPending = false;
+    let currentCursor = 'default'; // Tracks the cursor state to prevent DOM thrashing
 
     function getMousePos(canvas, evt) {
         const rect = canvas.getBoundingClientRect();
@@ -790,44 +790,47 @@ function drawLabelBg(text, x, y) {
     canvas.addEventListener('mousedown', (evt) => {
         const pos = getMousePos(canvas, evt);
         
-        // Check if we clicked inside any node
         for (let id of (machine.states || [])) {
             const layout = machine.layout[id];
             if (!layout) continue;
             
             const nodeX = layout.x * canvas.width;
             const nodeY = layout.y * canvas.height;
-            const dist = Math.hypot(pos.x - nodeX, pos.y - nodeY);
             
-            // 28 is the radius of the node in the draw() function
-            if (dist <= 28) {
+            if (Math.hypot(pos.x - nodeX, pos.y - nodeY) <= 28) {
                 isDragging = true;
                 draggedNode = id;
-                canvas.style.cursor = 'grabbing';
+                
+                // 1. CRITICAL FIX: Stops browser from trying to highlight text or drag the canvas itself
+                evt.preventDefault(); 
+                
+                if (currentCursor !== 'grabbing') {
+                    canvas.style.cursor = 'grabbing';
+                    currentCursor = 'grabbing';
+                }
                 return;
             }
         }
     });
 
-    // CHANGE 1: Listen on 'window' instead of 'canvas' so fast drags don't escape
     window.addEventListener('mousemove', (evt) => {
         if (isDragging && draggedNode) {
+            // Prevent default behavior while dragging to ensure smooth tracking
+            evt.preventDefault();
+            
             const pos = getMousePos(canvas, evt);
             
-            // CHANGE 2: Clamp coordinates (0.05 to 0.95) so nodes can't get dragged off-screen
             machine.layout[draggedNode].x = Math.max(0.05, Math.min(0.95, pos.x / canvas.width));
             machine.layout[draggedNode].y = Math.max(0.05, Math.min(0.95, pos.y / canvas.height));
             
-            // CHANGE 3: Prevent lag by using requestAnimationFrame
             if (!drawPending) {
                 drawPending = true;
                 requestAnimationFrame(() => {
                     draw();
-                    drawPending = false; // Reset after drawing
+                    drawPending = false;
                 });
             }
         } else if (evt.target === canvas) {
-            // Hover effect to show the user a node is draggable (only when over canvas)
             let hovering = false;
             const pos = getMousePos(canvas, evt);
             for (let id of (machine.states || [])) {
@@ -841,7 +844,13 @@ function drawLabelBg(text, x, y) {
                     break;
                 }
             }
-            canvas.style.cursor = hovering ? 'grab' : 'default';
+            
+            const newCursor = hovering ? 'grab' : 'default';
+            // 2. CRITICAL FIX: Only update the HTML DOM if the cursor actually changed
+            if (currentCursor !== newCursor) {
+                canvas.style.cursor = newCursor;
+                currentCursor = newCursor;
+            }
         }
     });
 
@@ -849,19 +858,18 @@ function drawLabelBg(text, x, y) {
         if (isDragging) {
             isDragging = false;
             draggedNode = null;
-            canvas.style.cursor = 'default';
+            if (currentCursor !== 'default') {
+                canvas.style.cursor = 'default';
+                currentCursor = 'default';
+            }
             
             // Automatically update the JSON textarea with the new layout coordinates
             document.getElementById('configInput').value = JSON.stringify(machine, null, 4);
         }
     }
 
-    // CHANGE 4: Listen on window so releasing the mouse outside the canvas stops the drag safely
     window.addEventListener('mouseup', stopDragging);
-    
-    // CHANGE 5: Removed 'canvas.addEventListener('mouseleave', stopDragging)'
     // ---------------------------
-
 function getMousePos(canvas, evt) {
     const rect = canvas.getBoundingClientRect();
     return {
