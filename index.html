@@ -269,7 +269,6 @@
             <button class="tab-btn" onclick="switchTab('guide', this)">📖 Guide</button>
         </div>
 
-        <!-- SIMULATOR TAB -->
         <div class="tab-panel active" id="tab-simulator">
             <div class="input-group">
                 <label>JSON CONFIGURATION (DFA/NFA)</label>
@@ -285,7 +284,6 @@
             <div id="resultBox" class="result"></div>
         </div>
 
-        <!-- GUIDE TAB -->
         <div class="tab-panel" id="tab-guide">
             <div class="guide-section">
                 <h4>How to Use</h4>
@@ -347,7 +345,6 @@
     <canvas id="nfaCanvas"></canvas>
 </div>
 
-<script>
 <script>
 // ---- TAB SWITCHING ----
 function switchTab(name, btn) {
@@ -765,10 +762,9 @@ function drawLabelBg(text, x, y) {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
-} // <-- This bracket was missing before, which swallowed the drag logic!
+}
 
-// --- BULLETPROOF DRAG AND DROP LOGIC ---
-// --- DIFFERENT LOGIC: POINTER EVENTS & CAPTURE ---
+// --- BULLETPROOF DRAG AND DROP LOGIC (POINTER CAPTURE) ---
 let draggedNode = null;
 
 function getPointerPos(canvas, evt) {
@@ -779,7 +775,6 @@ function getPointerPos(canvas, evt) {
     };
 }
 
-// 1. Use 'pointerdown' instead of 'mousedown'
 canvas.addEventListener('pointerdown', (evt) => {
     const pos = getPointerPos(canvas, evt);
     
@@ -792,11 +787,7 @@ canvas.addEventListener('pointerdown', (evt) => {
         
         if (Math.hypot(pos.x - nodeX, pos.y - nodeY) <= 28) {
             draggedNode = id;
-            
-            // THE MAGIC BULLET: Lock the mouse to the canvas!
-            // It will not drop the node even if you drag outside the browser window.
             canvas.setPointerCapture(evt.pointerId);
-            
             canvas.style.cursor = 'grabbing';
             evt.preventDefault();
             return;
@@ -804,18 +795,13 @@ canvas.addEventListener('pointerdown', (evt) => {
     }
 });
 
-// 2. Use 'pointermove'
 canvas.addEventListener('pointermove', (evt) => {
     if (draggedNode) {
         const pos = getPointerPos(canvas, evt);
-        
         machine.layout[draggedNode].x = Math.max(0.05, Math.min(0.95, pos.x / canvas.width));
         machine.layout[draggedNode].y = Math.max(0.05, Math.min(0.95, pos.y / canvas.height));
-        
-        // Pointer events are naturally hardware-synced, so we can just draw directly
         draw(); 
     } else {
-        // Hover logic
         let hovering = false;
         const pos = getPointerPos(canvas, evt);
         for (let id of (machine.states || [])) {
@@ -832,29 +818,21 @@ canvas.addEventListener('pointermove', (evt) => {
     }
 });
 
-// 3. Clean up when the pointer is released or interrupted
 function stopPointer(evt) {
     if (draggedNode) {
-        // Release the lock
         canvas.releasePointerCapture(evt.pointerId);
         draggedNode = null;
         canvas.style.cursor = 'default';
-        
         document.getElementById('configInput').value = JSON.stringify(machine, null, 4);
     }
 }
 
-// 4. Handle both 'up' and 'cancel' (like alt-tabbing while dragging)
 canvas.addEventListener('pointerup', stopPointer);
 canvas.addEventListener('pointercancel', stopPointer);
-// -------------------------------------------------
-// ---------------------------
+// ---------------------------------------------------------
 
 window.onresize = draw;
-
-// Initialize layout on load
 loadConfig();
-</script>
 </script>
 </body>
 </html>
