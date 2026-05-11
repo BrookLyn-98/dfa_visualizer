@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dynamic Automaton Visualizer</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
+
+    body { 
+        font-family: 'Outfit', sans-serif; 
+        background: #0b1220; 
+        color: #f4f4f5; 
+        margin: 0; 
+        overflow: hidden; 
+    }
+    .container { 
+        display: grid; 
+        grid-template-columns: 360px 1fr; 
+        height: 100vh; 
+    }
+    .sidebar { 
+        background: rgba(11, 18, 32, 0.82); 
+        backdrop-filter: blur(12px);
+        padding: 30px 25px; 
+        border-right: 1px solid #1f2f4a; 
+        display: flex; 
+        flex-direction: column; 
+        gap: 15px; 
+        box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+        z-index: 10;
+        overflow-y: auto;
+    }
+    .sidebar::-webkit-scrollbar { width: 6px; }
+    .sidebar::-webkit-scrollbar-thumb { background: #294267; border-radius: 4px; }
+
+    h3 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 800;
+        background: linear-gradient(135deg, #38bdf8, #34d399);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    canvas { 
+        background: radial-gradient(circle at center, #10233f 0%, #0b1220 52%, #070b13 100%); 
+        width: 100%; 
+        height: 100%; 
+    }
+    .input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #93a6c7;
+        letter-spacing: 0.5px;
+    }
+    input, textarea { 
+        background: #0f1b30; 
+        border: 1px solid #294267; 
+        color: #f4f4f5; 
+        padding: 10px; 
+        border-radius: 8px; 
+        width: 100%; 
+        box-sizing: border-box; 
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        transition: border-color 0.2s;
+    }
+    textarea {
+        resize: vertical;
+        min-height: 180px;
+        line-height: 1.4;
+    }
+    input:focus, textarea:focus {
+        outline: none;
+        border-color: #38bdf8;
+    }
+    .btn-group {
+        display: flex;
+        gap: 10px;
+    }
+    button { 
+        flex: 1;
+        background: linear-gradient(135deg, #0ea5e9, #10b981); 
+        color: white; 
+        border: none; 
+        padding: 12px; 
+        border-radius: 8px; 
+        cursor: pointer; 
+        font-weight: 600; 
+        font-size: 13px;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+    }
+    button.secondary {
+        background: #1e293b;
+        box-shadow: none;
+        border: 1px solid #334155;
+    }
+    button:hover { 
+        filter: brightness(1.1);
+        transform: translateY(-1px);
+    }
+    button:active {
+        transform: translateY(1px);
+    }
+    .trace { 
+        font-family: 'JetBrains Mono', monospace; 
+        font-size: 12px; 
+        background: #101a2b; 
+        padding: 12px; 
+        border-radius: 8px; 
+        min-height: 80px; 
+        border: 1px solid #24395a;
+        border-left: 4px solid #0ea5e9; 
+        color: #d4d4d8;
+        line-height: 1.5;
+    }
+    .result { 
+        padding: 14px; 
+        border-radius: 8px; 
+        text-align: center; 
+        font-weight: 800; 
+        font-size: 14px;
+        letter-spacing: 1px;
+        display: none; 
+        animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes popIn {
+        0% { transform: scale(0.9); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    .accept { 
+        background: rgba(34, 197, 94, 0.15); 
+        color: #4ade80; 
+        border: 1px solid rgba(74, 222, 128, 0.3); 
+    }
+    .reject { 
+        background: rgba(239, 68, 68, 0.15); 
+        color: #f87171; 
+        border: 1px solid rgba(248, 113, 113, 0.3); 
+    }
+
+    /* Tabs */
+    .tab-bar {
+        display: flex;
+        gap: 4px;
+        background: #0f1b30;
+        border-radius: 10px;
+        padding: 4px;
+        border: 1px solid #1f2f4a;
+    }
+    .tab-btn {
+        flex: 1;
+        background: transparent;
+        border: none;
+        color: #93a6c7;
+        padding: 8px 10px;
+        border-radius: 7px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: none;
+        transform: none !important;
+    }
+    .tab-btn:hover { background: #1a2c47; color: #d4e2f4; filter: none; }
+    .tab-btn.active {
+        background: linear-gradient(135deg, #0ea5e9, #10b981);
+        color: #fff;
+        box-shadow: 0 2px 10px rgba(14, 165, 233, 0.25);
+    }
+    .tab-panel { display: none; flex-direction: column; gap: 15px; }
+    .tab-panel.active { display: flex; }
+
+    /* Guide tab styles */
+    .guide-section {
+        background: #0f1b30;
+        border: 1px solid #1f2f4a;
+        border-radius: 10px;
+        padding: 14px;
+    }
+    .guide-section h4 {
+        margin: 0 0 10px 0;
+        font-size: 11px;
+        font-weight: 700;
+        color: #38bdf8;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    }
+    .guide-section p, .guide-section li {
+        font-size: 12px;
+        color: #93a6c7;
+        line-height: 1.65;
+        margin: 0 0 6px 0;
+    }
+    .guide-section ul { margin: 4px 0; padding-left: 18px; }
+    .guide-section code {
+        font-family: 'JetBrains Mono', monospace;
+        background: #152135;
+        color: #7dd3fc;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 11px;
+    }
+    .preset-card {
+        background: #0f1b30;
+        border: 1px solid #1f2f4a;
+        border-radius: 10px;
+        padding: 12px 14px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .preset-card:hover {
+        border-color: #38bdf8;
+        background: #122236;
+        transform: translateY(-1px);
+    }
+    .preset-card .preset-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: #e2eaf6;
+    }
+    .preset-card .preset-desc {
+        font-size: 11px;
+        color: #6b82a8;
+        line-height: 1.5;
+    }
+    .preset-card .preset-tag {
+        font-size: 10px;
+        font-weight: 700;
+        color: #34d399;
+        background: rgba(52,211,153,0.1);
+        border: 1px solid rgba(52,211,153,0.2);
+        border-radius: 20px;
+        padding: 2px 8px;
+        align-self: flex-start;
+        margin-top: 2px;
+        letter-spacing: 0.5px;
+    }
+    .preset-tag.nfa { color: #a78bfa; background: rgba(167,139,250,0.1); border-color: rgba(167,139,250,0.2); }
+
+    /* Small start button */
+    button.sim-btn {
+        padding: 9px 14px;
+        font-size: 12px;
+        border-radius: 7px;
+        flex: unset;
+        width: 100%;
+        box-shadow: 0 3px 10px rgba(14, 165, 233, 0.2);
+    }
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="sidebar">
+        <h3>Automaton Visualizer</h3>
+
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="switchTab('simulator', this)">⚙ Simulator</button>
+            <button class="tab-btn" onclick="switchTab('guide', this)">📖 Guide</button>
+        </div>
+
+        <!-- SIMULATOR TAB -->
+        <div class="tab-panel active" id="tab-simulator">
+            <div class="input-group">
+                <label>JSON CONFIGURATION (DFA/NFA)</label>
+                <textarea id="configInput" autocomplete="off" spellcheck="false"></textarea>
+                <button class="secondary" onclick="loadConfig()">Update Graph</button>
+            </div>
+            <div class="input-group">
+                <label>TEST STRING</label>
+                <input type="text" id="strInput" value="ababa" autocomplete="off">
+            </div>
+            <button class="sim-btn" onclick="runSim()">▶ Start Simulation</button>
+            <div class="trace" id="traceBox">Load a graph and press Start.</div>
+            <div id="resultBox" class="result"></div>
+        </div>
+
+        <!-- GUIDE TAB -->
+        <div class="tab-panel" id="tab-guide">
+            <div class="guide-section">
+                <h4>How to Use</h4>
+                <ul>
+                    <li>Paste a <code>JSON</code> config describing your automaton in the <strong>Simulator</strong> tab.</li>
+                    <li>Click <strong>Update Graph</strong> to render it on the canvas.</li>
+                    <li>Enter a test string and click <strong>▶ Start Simulation</strong> to animate the run.</li>
+                    <li><strong>Drag</strong> any state node on the canvas to reposition it — the JSON updates automatically.</li>
+                </ul>
+            </div>
+
+            <div class="guide-section">
+                <h4>JSON Format</h4>
+                <ul>
+                    <li><code>states</code> — list of all state names</li>
+                    <li><code>initial</code> — the start state</li>
+                    <li><code>finals</code> — list of accepting states</li>
+                    <li><code>delta</code> — transition map: <code>state → symbol → [targets]</code></li>
+                    <li><code>layout</code> — optional <code>x/y</code> (0–1) positions per state</li>
+                    <li>Use <code>""</code> as a symbol for <strong>λ-transitions</strong> (NFA only)</li>
+                </ul>
+            </div>
+
+            <div class="guide-section">
+                <h4>Preset Examples</h4>
+            </div>
+
+            <div class="preset-card" onclick="loadPreset('evenA')">
+                <div class="preset-title">Even number of a's</div>
+                <div class="preset-desc">DFA that accepts strings over {a,b} with an even count of 'a'.</div>
+                <div class="preset-tag">DFA</div>
+            </div>
+
+            <div class="preset-card" onclick="loadPreset('endsWith01')">
+                <div class="preset-title">Ends with "01"</div>
+                <div class="preset-desc">DFA that accepts binary strings ending in '01'.</div>
+                <div class="preset-tag">DFA</div>
+            </div>
+
+            <div class="preset-card" onclick="loadPreset('divBy3')">
+                <div class="preset-title">Binary divisible by 3</div>
+                <div class="preset-desc">DFA over {0,1} that accepts binary numbers divisible by 3.</div>
+                <div class="preset-tag">DFA</div>
+            </div>
+
+            <div class="preset-card" onclick="loadPreset('nfaContains')">
+                <div class="preset-title">Contains "ab"</div>
+                <div class="preset-desc">NFA over {a,b} that accepts strings containing the substring 'ab'.</div>
+                <div class="preset-tag nfa">NFA</div>
+            </div>
+
+            <div class="preset-card" onclick="loadPreset('lambdaNFA')">
+                <div class="preset-title">λ-NFA: a* b*</div>
+                <div class="preset-desc">NFA with λ-transitions accepting strings of zero or more a's followed by zero or more b's.</div>
+                <div class="preset-tag nfa">λ-NFA</div>
+            </div>
+        </div>
+    </div>
+    <canvas id="nfaCanvas"></canvas>
+</div>
+
+<script>
+// ---- TAB SWITCHING ----
+function switchTab(name, btn) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+}
+
+// ---- PRESET EXAMPLES ----
+const presets = {
+    evenA: {
+        "states": ["q0","q1"],
+        "initial": "q0",
+        "finals": ["q0"],
+        "delta": {
+            "q0": { "a": ["q1"], "b": ["q0"] },
+            "q1": { "a": ["q0"], "b": ["q1"] }
+        }
+    },
+    endsWith01: {
+        "states": ["q0","q1","q2"],
+        "initial": "q0",
+        "finals": ["q2"],
+        "delta": {
+            "q0": { "0": ["q1"], "1": ["q0"] },
+            "q1": { "0": ["q1"], "1": ["q2"] },
+            "q2": { "0": ["q1"], "1": ["q0"] }
+        }
+    },
+    divBy3: {
+        "states": ["q0","q1","q2"],
+        "initial": "q0",
+        "finals": ["q0"],
+        "delta": {
+            "q0": { "0": ["q0"], "1": ["q1"] },
+            "q1": { "0": ["q2"], "1": ["q0"] },
+            "q2": { "0": ["q1"], "1": ["q2"] }
+        }
+    },
+    nfaContains: {
+        "states": ["q0","q1","q2"],
+        "initial": "q0",
+        "finals": ["q2"],
+        "delta": {
+            "q0": { "a": ["q0","q1"], "b": ["q0"] },
+            "q1": { "b": ["q2"] },
+            "q2": { "a": ["q2"], "b": ["q2"] }
+        }
+    },
+    lambdaNFA: {
+        "states": ["q0","q1","q2"],
+        "initial": "q0",
+        "finals": ["q2"],
+        "delta": {
+            "q0": { "a": ["q0"], "": ["q1"] },
+            "q1": { "b": ["q1"], "": ["q2"] },
+            "q2": {}
+        }
+    }
+};
+
+function loadPreset(name) {
+    const p = presets[name];
+    if (!p) return;
+    document.getElementById('configInput').value = JSON.stringify(p, null, 4);
+    // Switch to simulator tab
+    switchTab('simulator', document.querySelector('.tab-btn'));
+    loadConfig();
+}
+
+// Default DFA Example: Accepts strings with an EVEN number of 'a's
+const defaultDFA = {
+    "states": ["q0", "q1"],
+    "initial": "q0",
+    "finals": ["q0"],
+    "delta": {
+        "q0": { "a": ["q1"], "b": ["q0"] },
+        "q1": { "a": ["q0"], "b": ["q1"] }
+    }
+};
+
+let machine = {};
+let steps = [];
+let currentStepIdx = 0;
+let animationTimer = null;
+
+// Populate textarea with default DFA
+document.getElementById('configInput').value = JSON.stringify(defaultDFA, null, 4);
+
+function loadConfig() {
+    try {
+        const rawText = document.getElementById('configInput').value;
+        const parsed = JSON.parse(rawText);
+        
+        machine = parsed;
+        
+        // Auto-generate circular layout if 'layout' is missing
+        if (!machine.layout) {
+            machine.layout = {};
+            const r = 0.25; // radius
+            const n = machine.states.length;
+            machine.states.forEach((s, i) => {
+                const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
+                machine.layout[s] = { 
+                    x: 0.5 + r * Math.cos(angle), 
+                    y: 0.5 + r * Math.sin(angle) 
+                };
+            });
+            // Update the textarea to show the generated layout so the user can tweak it
+            document.getElementById('configInput').value = JSON.stringify(machine, null, 4);
+        }
+        
+        // Reset Simulation
+        clearTimeout(animationTimer);
+        steps = [];
+        currentStepIdx = 0;
+        document.getElementById('resultBox').style.display = 'none';
+        document.getElementById('traceBox').innerHTML = 'Graph updated. Ready to simulate.';
+        
+        draw();
+    } catch (e) {
+        alert("Invalid JSON! Please check your formatting.\nError: " + e.message);
+    }
+}
+
+function getLambdaClosure(stateSet) {
+    let closure = new Set(stateSet);
+    let stack = [...stateSet];
+    while(stack.length > 0) {
+        let s = stack.pop();
+        if(!machine.delta[s]) continue;
+        (machine.delta[s][''] || []).forEach(next => {
+            if(!closure.has(next)) {
+                closure.add(next);
+                stack.push(next);
+            }
+        });
+    }
+    return closure;
+}
+
+function runSim() {
+    clearTimeout(animationTimer);
+    const input = document.getElementById('strInput').value;
+    steps = [];
+    
+    // Fallback if missing initial
+    if(!machine.initial) machine.initial = machine.states[0];
+    
+    let current = getLambdaClosure([machine.initial]);
+    steps.push({ states: new Set(current), char: 'Start' });
+
+    for (let char of input) {
+        let nextSet = new Set();
+        current.forEach(s => {
+            if (machine.delta[s] && machine.delta[s][char]) {
+                machine.delta[s][char].forEach(t => nextSet.add(t));
+            }
+        });
+        current = getLambdaClosure(nextSet);
+        steps.push({ states: new Set(current), char: char });
+    }
+    
+    currentStepIdx = 0;
+    document.getElementById('resultBox').style.display = 'none';
+    animate();
+}
+
+function animate() {
+    draw();
+    if (currentStepIdx < steps.length - 1) {
+        currentStepIdx++;
+        updateUI();
+        animationTimer = setTimeout(animate, 1000); 
+    } else {
+        updateUI();
+    }
+}
+
+function updateUI() {
+    const step = steps[currentStepIdx];
+    const box = document.getElementById('traceBox');
+    
+    let stateHtml = [...step.states].map(s => 
+        `<span style="color: ${(machine.finals || []).includes(s) ? '#34d399' : '#38bdf8'}">${s}</span>`
+    ).join(', ');
+    
+    box.innerHTML = `<span style="color:#8195b8">Step ${currentStepIdx}</span><br>
+                     Reading: <strong style="color: #f4f4f5">'${step.char}'</strong><br>
+                     Active: { ${stateHtml || '<span style="color:#f87171">∅ (Dead)</span>'} }`;
+    
+    if (currentStepIdx === steps.length - 1) {
+        const isAccepted = [...step.states].some(s => (machine.finals || []).includes(s));
+        const res = document.getElementById('resultBox');
+        res.style.display = 'block';
+        res.className = isAccepted ? 'result accept' : 'result reject';
+        res.innerText = isAccepted ? 'STRING ACCEPTED' : 'STRING REJECTED';
+    }
+}
+
+const canvas = document.getElementById('nfaCanvas');
+const ctx = canvas.getContext('2d');
+
+function draw() {
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    const active = steps[currentStepIdx]?.states || new Set();
+
+    const getCoord = (id) => {
+        const layout = machine.layout[id] || {x: 0.5, y: 0.5};
+        return { x: layout.x * canvas.width, y: layout.y * canvas.height };
+    };
+
+    let edges = {};
+    Object.keys(machine.delta || {}).forEach(u => {
+        Object.keys(machine.delta[u]).forEach(sym => {
+            const targets = machine.delta[u][sym] || [];
+            targets.forEach(v => {
+                const key = `${u}-${v}`;
+                if (!edges[key]) edges[key] = { u, v, labels: [], hasLambda: false };
+                const displaySym = sym === '' ? 'λ' : sym;
+                if (!edges[key].labels.includes(displaySym)) {
+                    edges[key].labels.push(displaySym);
+                }
+                if (sym === '') edges[key].hasLambda = true;
+            });
+        });
+    });
+
+    const outgoing = {};
+    const incoming = {};
+    (machine.states || []).forEach(s => {
+        outgoing[s] = [];
+        incoming[s] = [];
+    });
+    Object.values(edges).forEach(edge => {
+        if (edge.u !== edge.v) {
+            if(outgoing[edge.u]) outgoing[edge.u].push(edge.v);
+            if(incoming[edge.v]) incoming[edge.v].push(edge.u);
+        }
+    });
+    (machine.states || []).forEach(s => {
+        if(outgoing[s]) outgoing[s].sort();
+        if(incoming[s]) incoming[s].sort();
+    });
+
+    ctx.font = 'bold 12px "JetBrains Mono", monospace';
+    Object.values(edges).forEach(edge => {
+        const reverseKey = `${edge.v}-${edge.u}`;
+        const isBidirectional = !!edges[reverseKey];
+        const curve = (edge.u === edge.v) ? 0 : (isBidirectional ? 60 : 20);
+        
+        const sourceLane = laneOffset(outgoing[edge.u], edge.v);
+        const targetLane = laneOffset(incoming[edge.v], edge.u);
+        
+        drawEdge(
+            getCoord(edge.u), 
+            getCoord(edge.v), 
+            edge.labels.join(', '), 
+            edge.u,
+            edge.u === edge.v, 
+            curve,
+            edge.hasLambda,
+            sourceLane,
+            targetLane
+        );
+    });
+
+    (machine.states || []).forEach(id => {
+        const p = getCoord(id);
+        const isActive = active.has(id);
+        const isFinal = (machine.finals || []).includes(id);
+        
+        if (isActive) {
+            ctx.shadowColor = '#38bdf8';
+            ctx.shadowBlur = 24;
+        } else {
+            ctx.shadowBlur = 0;
+        }
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 28, 0, Math.PI*2);
+        ctx.fillStyle = isActive ? '#0ea5e9' : '#112039';
+        ctx.strokeStyle = isActive ? '#e0f2fe' : '#375678';
+        ctx.lineWidth = isActive ? 3 : 2;
+        ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0; 
+
+        if (isFinal) {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 22, 0, Math.PI*2);
+            ctx.strokeStyle = isActive ? '#fff' : '#34d399';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = '700 16px Outfit, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(id, p.x, p.y);
+    });
+}
+
+function laneOffset(list, item) {
+    if (!list || list.length <= 1) return 0;
+    const first = list.indexOf(item);
+    if (first < 0) return 0;
+    const sameItemCount = list.filter(v => v === item).length;
+    const center = (list.length - 1) / 2;
+    const itemCenterShift = (sameItemCount - 1) / 2;
+    return (first + itemCenterShift) - center;
+}
+
+function drawEdge(p1, p2, label, sourceId, self, curve, hasLambda, sourceLane, targetLane) {
+    ctx.strokeStyle = hasLambda ? '#34d399' : '#38bdf8';
+    ctx.setLineDash(hasLambda ? [7, 5] : []);
+    ctx.fillStyle = hasLambda ? '#6ee7b7' : '#7dd3fc';
+    ctx.lineWidth = 2.2;
+
+    if (self) {
+        // Dynamic looping direction based on canvas position
+        const canvasCenterY = canvas.height / 2;
+        const loopsDown = p1.y > canvasCenterY;
+        const loopRadius = 24;
+        
+        const offset = { x: 0, y: loopsDown ? 56 : -56 };
+        const centerX = p1.x + offset.x;
+        const centerY = p1.y + offset.y;
+        
+        ctx.beginPath();
+        if (offset.y > 0) {
+             ctx.arc(centerX, centerY, loopRadius, 0.75 * Math.PI, 2.75 * Math.PI);
+        } else {
+             ctx.arc(centerX, centerY, loopRadius, 0.25 * Math.PI, 2.25 * Math.PI);
+        }
+        ctx.stroke();
+
+        const arrowAngle = offset.y > 0 ? 1.8 * Math.PI : 0.2 * Math.PI;
+        const arrowX = centerX + loopRadius * Math.cos(arrowAngle);
+        const arrowY = centerY + loopRadius * Math.sin(arrowAngle);
+        drawArrowHead(arrowX, arrowY, arrowAngle + Math.PI / 2, hasLambda);
+        
+        const labelY = centerY + (offset.y > 0 ? 34 : -34);
+        drawLabelBg(label, centerX, labelY);
+        ctx.fillText(label, centerX, labelY);
+    } else {
+        const stateRadius = 28;
+        const laneSpacing = 12;
+        const pairSpacing = Math.abs(curve) > 40 ? 18 : 0;
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const dist = Math.hypot(dx, dy) || 1;
+
+        const nx = -dy / dist;
+        const ny = dx / dist;
+
+        const ctrlX = (p1.x + p2.x) / 2 + nx * curve;
+        const ctrlY = (p1.y + p2.y) / 2 + ny * curve;
+
+        const startVX = ctrlX - p1.x;
+        const startVY = ctrlY - p1.y;
+        const startMag = Math.hypot(startVX, startVY) || 1;
+
+        const endVX = p2.x - ctrlX;
+        const endVY = p2.y - ctrlY;
+        const endMag = Math.hypot(endVX, endVY) || 1;
+
+        const startX = p1.x + (startVX / startMag) * stateRadius + nx * (sourceLane * laneSpacing + pairSpacing);
+        const startY = p1.y + (startVY / startMag) * stateRadius + ny * (sourceLane * laneSpacing + pairSpacing);
+        const endX = p2.x - (endVX / endMag) * stateRadius + nx * (targetLane * laneSpacing + pairSpacing);
+        const endY = p2.y - (endVY / endMag) * stateRadius + ny * (targetLane * laneSpacing + pairSpacing);
+        
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.quadraticCurveTo(ctrlX, ctrlY, endX, endY);
+        ctx.stroke();
+        
+        const labelT = 0.45; 
+        const labelX = (1 - labelT) * (1 - labelT) * startX + 2 * (1 - labelT) * labelT * ctrlX + labelT * labelT * endX;
+        const labelY = (1 - labelT) * (1 - labelT) * startY + 2 * (1 - labelT) * labelT * ctrlY + labelT * labelT * endY;
+        const labelLift = 22 + Math.min(Math.abs(curve) * 0.15, 20);
+        
+        const liftedX = labelX + nx * labelLift;
+        const liftedY = labelY + ny * labelLift;
+        
+        drawLabelBg(label, liftedX, liftedY);
+        ctx.fillText(label, liftedX, liftedY);
+        
+        const arrowAngle = Math.atan2(endY - ctrlY, endX - ctrlX);
+        drawArrowHead(endX, endY, arrowAngle, hasLambda);
+    }
+    ctx.setLineDash([]); 
+}
+
+function drawArrowHead(x, y, angle, hasLambda) {
+    const arrowLength = 11;
+    const arrowWidth = 6;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-arrowLength, -arrowWidth);
+    ctx.lineTo(-arrowLength + 2, 0);
+    ctx.lineTo(-arrowLength, arrowWidth);
+    ctx.closePath();
+    ctx.fillStyle = hasLambda ? '#6ee7b7' : '#7dd3fc';
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawLabelBg(text, x, y) {
+    ctx.save();
+    const width = ctx.measureText(text).width + 12;
+    ctx.fillStyle = '#0b1627';
+    ctx.strokeStyle = '#233a58';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x - width/2, y - 10, width, 20, 10);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // --- DRAG AND DROP LOGIC ---
+let isDragging = false;
+let draggedNode = null;
+
+function getMousePos(canvas, evt) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: evt.clientX - rect.left,
+        y: evt.clientY - rect.top
+    };
+}
+
+canvas.addEventListener('mousedown', (evt) => {
+    const pos = getMousePos(canvas, evt);
+    
+    // Check if we clicked inside any node
+    for (let id of (machine.states || [])) {
+        const layout = machine.layout[id];
+        if (!layout) continue;
+        
+        const nodeX = layout.x * canvas.width;
+        const nodeY = layout.y * canvas.height;
+        const dist = Math.hypot(pos.x - nodeX, pos.y - nodeY);
+        
+        // 28 is the radius of the node in the draw() function
+        if (dist <= 28) {
+            isDragging = true;
+            draggedNode = id;
+            canvas.style.cursor = 'grabbing';
+            return;
+        }
+    }
+});
+
+canvas.addEventListener('mousemove', (evt) => {
+    const pos = getMousePos(canvas, evt);
+    
+    if (isDragging && draggedNode) {
+        // Update layout with normalized coordinates (0 to 1)
+        machine.layout[draggedNode].x = pos.x / canvas.width;
+        machine.layout[draggedNode].y = pos.y / canvas.height;
+        draw(); // Redraw the canvas immediately
+    } else {
+        // Hover effect to show the user a node is draggable
+        let hovering = false;
+        for (let id of (machine.states || [])) {
+            const layout = machine.layout[id];
+            if (!layout) continue;
+            
+            const nodeX = layout.x * canvas.width;
+            const nodeY = layout.y * canvas.height;
+            if (Math.hypot(pos.x - nodeX, pos.y - nodeY) <= 28) {
+                hovering = true;
+                break;
+            }
+        }
+        canvas.style.cursor = hovering ? 'grab' : 'default';
+    }
+});
+
+function stopDragging() {
+    if (isDragging) {
+        isDragging = false;
+        draggedNode = null;
+        canvas.style.cursor = 'default';
+        
+        // Bonus: Automatically update the JSON textarea with the new layout coordinates!
+        document.getElementById('configInput').value = JSON.stringify(machine, null, 4);
+    }
+}
+
+canvas.addEventListener('mouseup', stopDragging);
+canvas.addEventListener('mouseleave', stopDragging);
+// ---------------------------
+}
+
+window.onresize = draw;
+
+// Initialize layout on load
+loadConfig();
+</script>
+</body>
+</html>
