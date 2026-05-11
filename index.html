@@ -348,6 +348,7 @@
 </div>
 
 <script>
+<script>
 // ---- TAB SWITCHING ----
 function switchTab(name, btn) {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -413,12 +414,10 @@ function loadPreset(name) {
     const p = presets[name];
     if (!p) return;
     document.getElementById('configInput').value = JSON.stringify(p, null, 4);
-    // Switch to simulator tab
     switchTab('simulator', document.querySelector('.tab-btn'));
     loadConfig();
 }
 
-// Default DFA Example: Accepts strings with an EVEN number of 'a's
 const defaultDFA = {
     "states": ["q0", "q1"],
     "initial": "q0",
@@ -434,7 +433,6 @@ let steps = [];
 let currentStepIdx = 0;
 let animationTimer = null;
 
-// Populate textarea with default DFA
 document.getElementById('configInput').value = JSON.stringify(defaultDFA, null, 4);
 
 function loadConfig() {
@@ -444,10 +442,9 @@ function loadConfig() {
         
         machine = parsed;
         
-        // Auto-generate circular layout if 'layout' is missing
         if (!machine.layout) {
             machine.layout = {};
-            const r = 0.25; // radius
+            const r = 0.25;
             const n = machine.states.length;
             machine.states.forEach((s, i) => {
                 const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
@@ -456,11 +453,9 @@ function loadConfig() {
                     y: 0.5 + r * Math.sin(angle) 
                 };
             });
-            // Update the textarea to show the generated layout so the user can tweak it
             document.getElementById('configInput').value = JSON.stringify(machine, null, 4);
         }
         
-        // Reset Simulation
         clearTimeout(animationTimer);
         steps = [];
         currentStepIdx = 0;
@@ -494,7 +489,6 @@ function runSim() {
     const input = document.getElementById('strInput').value;
     steps = [];
     
-    // Fallback if missing initial
     if(!machine.initial) machine.initial = machine.states[0];
     
     let current = getLambdaClosure([machine.initial]);
@@ -670,7 +664,6 @@ function drawEdge(p1, p2, label, sourceId, self, curve, hasLambda, sourceLane, t
     ctx.lineWidth = 2.2;
 
     if (self) {
-        // Dynamic looping direction based on canvas position
         const canvasCenterY = canvas.height / 2;
         const loopsDown = p1.y > canvasCenterY;
         const loopRadius = 24;
@@ -772,104 +765,14 @@ function drawLabelBg(text, x, y) {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
+} // <-- This bracket was missing before, which swallowed the drag logic!
 
-    // --- DRAG AND DROP LOGIC ---
-    let isDragging = false;
-    let draggedNode = null;
-    let drawPending = false;
-    let currentCursor = 'default'; // Tracks the cursor state to prevent DOM thrashing
+// --- BULLETPROOF DRAG AND DROP LOGIC ---
+let isDragging = false;
+let draggedNode = null;
+let drawPending = false;
+let currentCursor = 'default';
 
-    function getMousePos(canvas, evt) {
-        const rect = canvas.getBoundingClientRect();
-        return {
-            x: evt.clientX - rect.left,
-            y: evt.clientY - rect.top
-        };
-    }
-
-    canvas.addEventListener('mousedown', (evt) => {
-        const pos = getMousePos(canvas, evt);
-        
-        for (let id of (machine.states || [])) {
-            const layout = machine.layout[id];
-            if (!layout) continue;
-            
-            const nodeX = layout.x * canvas.width;
-            const nodeY = layout.y * canvas.height;
-            
-            if (Math.hypot(pos.x - nodeX, pos.y - nodeY) <= 28) {
-                isDragging = true;
-                draggedNode = id;
-                
-                // 1. CRITICAL FIX: Stops browser from trying to highlight text or drag the canvas itself
-                evt.preventDefault(); 
-                
-                if (currentCursor !== 'grabbing') {
-                    canvas.style.cursor = 'grabbing';
-                    currentCursor = 'grabbing';
-                }
-                return;
-            }
-        }
-    });
-
-    window.addEventListener('mousemove', (evt) => {
-        if (isDragging && draggedNode) {
-            // Prevent default behavior while dragging to ensure smooth tracking
-            evt.preventDefault();
-            
-            const pos = getMousePos(canvas, evt);
-            
-            machine.layout[draggedNode].x = Math.max(0.05, Math.min(0.95, pos.x / canvas.width));
-            machine.layout[draggedNode].y = Math.max(0.05, Math.min(0.95, pos.y / canvas.height));
-            
-            if (!drawPending) {
-                drawPending = true;
-                requestAnimationFrame(() => {
-                    draw();
-                    drawPending = false;
-                });
-            }
-        } else if (evt.target === canvas) {
-            let hovering = false;
-            const pos = getMousePos(canvas, evt);
-            for (let id of (machine.states || [])) {
-                const layout = machine.layout[id];
-                if (!layout) continue;
-                
-                const nodeX = layout.x * canvas.width;
-                const nodeY = layout.y * canvas.height;
-                if (Math.hypot(pos.x - nodeX, pos.y - nodeY) <= 28) {
-                    hovering = true;
-                    break;
-                }
-            }
-            
-            const newCursor = hovering ? 'grab' : 'default';
-            // 2. CRITICAL FIX: Only update the HTML DOM if the cursor actually changed
-            if (currentCursor !== newCursor) {
-                canvas.style.cursor = newCursor;
-                currentCursor = newCursor;
-            }
-        }
-    });
-
-    function stopDragging() {
-        if (isDragging) {
-            isDragging = false;
-            draggedNode = null;
-            if (currentCursor !== 'default') {
-                canvas.style.cursor = 'default';
-                currentCursor = 'default';
-            }
-            
-            // Automatically update the JSON textarea with the new layout coordinates
-            document.getElementById('configInput').value = JSON.stringify(machine, null, 4);
-        }
-    }
-
-    window.addEventListener('mouseup', stopDragging);
-    // ---------------------------
 function getMousePos(canvas, evt) {
     const rect = canvas.getBoundingClientRect();
     return {
@@ -881,36 +784,46 @@ function getMousePos(canvas, evt) {
 canvas.addEventListener('mousedown', (evt) => {
     const pos = getMousePos(canvas, evt);
     
-    // Check if we clicked inside any node
     for (let id of (machine.states || [])) {
         const layout = machine.layout[id];
         if (!layout) continue;
         
         const nodeX = layout.x * canvas.width;
         const nodeY = layout.y * canvas.height;
-        const dist = Math.hypot(pos.x - nodeX, pos.y - nodeY);
         
-        // 28 is the radius of the node in the draw() function
-        if (dist <= 28) {
+        if (Math.hypot(pos.x - nodeX, pos.y - nodeY) <= 28) {
             isDragging = true;
             draggedNode = id;
-            canvas.style.cursor = 'grabbing';
+            evt.preventDefault(); 
+            
+            if (currentCursor !== 'grabbing') {
+                canvas.style.cursor = 'grabbing';
+                currentCursor = 'grabbing';
+            }
             return;
         }
     }
 });
 
-canvas.addEventListener('mousemove', (evt) => {
-    const pos = getMousePos(canvas, evt);
-    
+window.addEventListener('mousemove', (evt) => {
     if (isDragging && draggedNode) {
-        // Update layout with normalized coordinates (0 to 1)
-        machine.layout[draggedNode].x = pos.x / canvas.width;
-        machine.layout[draggedNode].y = pos.y / canvas.height;
-        draw(); // Redraw the canvas immediately
-    } else {
-        // Hover effect to show the user a node is draggable
+        evt.preventDefault();
+        
+        const pos = getMousePos(canvas, evt);
+        
+        machine.layout[draggedNode].x = Math.max(0.05, Math.min(0.95, pos.x / canvas.width));
+        machine.layout[draggedNode].y = Math.max(0.05, Math.min(0.95, pos.y / canvas.height));
+        
+        if (!drawPending) {
+            drawPending = true;
+            requestAnimationFrame(() => {
+                draw();
+                drawPending = false;
+            });
+        }
+    } else if (evt.target === canvas) {
         let hovering = false;
+        const pos = getMousePos(canvas, evt);
         for (let id of (machine.states || [])) {
             const layout = machine.layout[id];
             if (!layout) continue;
@@ -922,7 +835,12 @@ canvas.addEventListener('mousemove', (evt) => {
                 break;
             }
         }
-        canvas.style.cursor = hovering ? 'grab' : 'default';
+        
+        const newCursor = hovering ? 'grab' : 'default';
+        if (currentCursor !== newCursor) {
+            canvas.style.cursor = newCursor;
+            currentCursor = newCursor;
+        }
     }
 });
 
@@ -930,22 +848,22 @@ function stopDragging() {
     if (isDragging) {
         isDragging = false;
         draggedNode = null;
-        canvas.style.cursor = 'default';
-        
-        // Bonus: Automatically update the JSON textarea with the new layout coordinates!
+        if (currentCursor !== 'default') {
+            canvas.style.cursor = 'default';
+            currentCursor = 'default';
+        }
         document.getElementById('configInput').value = JSON.stringify(machine, null, 4);
     }
 }
 
-canvas.addEventListener('mouseup', stopDragging);
-canvas.addEventListener('mouseleave', stopDragging);
+window.addEventListener('mouseup', stopDragging);
 // ---------------------------
-}
 
 window.onresize = draw;
 
 // Initialize layout on load
 loadConfig();
+</script>
 </script>
 </body>
 </html>
